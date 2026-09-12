@@ -70,14 +70,17 @@ function accountsFrom(text: string): string[] {
  * owning Payoneer never implies the client can pay through Payoneer.
  */
 function clientRails(prompt: string, source: string): string[] {
-  const text = `${prompt} ${source}`;
   const rails = new Set<string>();
-  const mentions = (pattern: RegExp) => pattern.test(text);
-  if (mentions(/bank transfer|wire|swift/i)) rails.add("bank_transfer");
-  if (mentions(/wise/i)) rails.add("wise");
-  if (mentions(/client[^.]*payoneer|pay(?:s|ing)?[^.]*via payoneer|only uses payoneer/i)) {
-    rails.add("payoneer");
-  }
+  // Only sentences describing the payer can add a rail; "I already have Payoneer"
+  // describes the freelancer's receiving setup, not the client's capability.
+  const payerSentences = prompt
+    .split(/[.;\n]/)
+    .filter((sentence) => /\b(they|client|clients|sender|he|she|company)\b/i.test(sentence))
+    .filter((sentence) => !/\bi (already )?(have|use|hold)\b/i.test(sentence));
+  const payerText = `${payerSentences.join(" ")} ${source}`;
+  if (/bank transfer|wire|swift/i.test(payerText)) rails.add("bank_transfer");
+  if (/wise/i.test(payerText)) rails.add("wise");
+  if (/payoneer/i.test(payerText)) rails.add("payoneer");
   if (rails.size === 0) rails.add("bank_transfer");
   return [...rails];
 }
