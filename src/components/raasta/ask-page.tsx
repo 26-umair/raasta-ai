@@ -5,15 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import type { AnalyzePaymentResult } from "@/integrations/external-supabase/analyze-payment";
 import {
-  analysisSteps,
-  exampleScenarios,
-  fieldsForScenario,
-  mockScenarios,
-  type MockScenarioKey,
-} from "./data";
-import { buildAnalysisContext } from "./map-context";
+  extractPayment,
+  type AnalyzePaymentResult,
+} from "@/integrations/external-supabase/analyze-payment";
+import { analysisSteps, exampleScenarios, mockScenarios, type MockScenarioKey } from "./data";
+import { buildAnalysisContext, fieldsFromContext } from "./map-context";
 import { usePaymentContext } from "./payment-context";
 import { LoadingSequence } from "./shared";
 
@@ -29,6 +26,7 @@ export function AskRaastaPage() {
   const [fields, setFields] = useState(payment.fields);
   const [clarification, setClarification] = useState<AnalyzePaymentResult["clarification"]>();
   const [issues, setIssues] = useState<AnalyzePaymentResult["validation"]["issues"]>([]);
+  const [extractionError, setExtractionError] = useState<string>();
 
   const goToResult = useCallback(() => {
     navigate({ to: "/recommendation", search: { flexible: undefined } });
@@ -56,10 +54,47 @@ export function AskRaastaPage() {
     [goToResult],
   );
 
+  /**
+   * Submit the natural-language prompt: the backend extracts the context.
+   * The returned normalizedContext is the source of truth — the cards are
+   * rendered from it, never from hardcoded demo data or previous state.
+   */
+  const startExtraction = useCallback(async () => {
+    setExtractionError(undefined);
+    setStage("loading");
+    try {
+      const { normalizedContext } = await extractPayment(prompt);
+      const extractedFields = fieldsFromContext(normalizedContext);
+      const extractedUrgency = normalizedContext.urgency === "today" ? "today" : "flexible";
+      setFields(extractedFields);
+      setUrgency(extractedUrgency);
+      setIssues([]);
+      payment.setDraft({
+        prompt,
+        fields: extractedFields,
+        scenario,
+        urgency: extractedUrgency,
+      });
+      payment.storeExtraction(normalizedContext);
+      setStage("context");
+    } catch (error) {
+      setExtractionError(
+        error instanceof Error
+          ? error.message
+          : "Raasta couldn't understand this payment right now. Your text is still here — try again.",
+      );
+      setStage("prompt");
+    }
+  }, [payment, prompt, scenario]);
+
   const startAnalysis = useCallback(async () => {
     payment.setDraft({ prompt, fields, scenario, urgency });
+    // Compare uses the backend's stored normalizedContext as the source of
+    // truth; timing changes patch only timingRequirement/urgency on it.
+    const base = payment.analysis.request ?? buildAnalysisContext(fields, prompt);
     const context = {
-      ...buildAnalysisContext(fields, prompt),
+      ...base,
+      rawText: prompt,
       urgency: (urgency === "today" ? "today" : "not_urgent") as "today" | "not_urgent",
       // Normalized enum only — never the display label.
       timingRequirement: (urgency === "today" ? "unknown" : "flexible") as "unknown" | "flexible",
@@ -90,10 +125,11 @@ export function AskRaastaPage() {
     [handleResult, payment],
   );
 
+  // Example chips only prefill the prompt text — extraction fills the cards.
   const selectScenario = (key: MockScenarioKey) => {
     setScenario(key);
     setPrompt(mockScenarios[key].prompt);
-    setFields(fieldsForScenario(key));
+    setExtractionError(undefined);
   };
 
   if (stage === "loading")
@@ -163,11 +199,17 @@ export function AskRaastaPage() {
               <span>
                 <ShieldCheck className="mini-shield" /> Compared by Raasta's Pakistan route engine
               </span>
-              <Button size="lg" onClick={() => setStage("context")} disabled={!prompt.trim()}>
+              <Button size="lg" onClick={() => void startExtraction()} disabled={!prompt.trim()}>
                 Find My Best Route <ArrowRight />
               </Button>
             </div>
           </div>
+          {extractionError && (
+            <div className="analysis-error" role="status">
+              <p>{extractionError}</p>
+              <Button onClick={() => void startExtraction()}>Retry</Button>
+            </div>
+          )}
           <div className="example-row" aria-label="Example prompts">
             {exampleScenarios.map((example) => (
               <button type="button" key={example.key} onClick={() => selectScenario(example.key)}>

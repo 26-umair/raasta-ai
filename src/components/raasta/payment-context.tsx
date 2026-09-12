@@ -38,6 +38,8 @@ type PaymentContextStore = PaymentContextValue & {
     patch: Partial<AnalyzePaymentContext>,
   ) => Promise<AnalyzePaymentResult | undefined>;
   resetAnalysis: () => void;
+  /** Stores the backend's normalizedContext as the source of truth for compare. */
+  storeExtraction: (context: AnalyzePaymentContext) => void;
 };
 
 const initialValue: PaymentContextValue = {
@@ -54,6 +56,7 @@ const PaymentContext = createContext<PaymentContextStore>({
   runAnalysis: async () => undefined,
   patchAnalysis: async () => undefined,
   resetAnalysis: () => {},
+  storeExtraction: () => {},
 });
 
 export function PaymentContextProvider({ children }: { children: ReactNode }) {
@@ -104,9 +107,22 @@ export function PaymentContextProvider({ children }: { children: ReactNode }) {
     setAnalysis({ loading: false });
   }, []);
 
+  const storeExtraction = useCallback((context: AnalyzePaymentContext) => {
+    requestId.current += 1;
+    setAnalysis({ loading: false, request: context });
+  }, []);
+
   const value = useMemo(
-    () => ({ ...draft, setDraft, analysis, runAnalysis, patchAnalysis, resetAnalysis }),
-    [analysis, draft, patchAnalysis, resetAnalysis, runAnalysis],
+    () => ({
+      ...draft,
+      setDraft,
+      analysis,
+      runAnalysis,
+      patchAnalysis,
+      resetAnalysis,
+      storeExtraction,
+    }),
+    [analysis, draft, patchAnalysis, resetAnalysis, runAnalysis, storeExtraction],
   );
   return <PaymentContext.Provider value={value}>{children}</PaymentContext.Provider>;
 }

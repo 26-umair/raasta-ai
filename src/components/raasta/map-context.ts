@@ -85,6 +85,134 @@ function clientRails(prompt: string, source: string): string[] {
   return [...rails];
 }
 
+// ---------- Reverse mapping: engine normalizedContext -> display fields ----------
+
+const COUNTRY_NAMES: Record<string, string> = {
+  GB: "United Kingdom",
+  US: "United States",
+  CA: "Canada",
+  AU: "Australia",
+  DE: "Germany",
+  FR: "France",
+  NL: "Netherlands",
+  SG: "Singapore",
+  AE: "United Arab Emirates",
+  SA: "Saudi Arabia",
+};
+
+const CURRENCY_FORMATS: Record<string, string> = { GBP: "£", USD: "$", EUR: "€" };
+
+export function formatAmount(amount?: number, currency?: string): string {
+  if (amount === undefined || !Number.isFinite(amount)) return "Amount not provided";
+  const formatted = amount.toLocaleString("en-US", { maximumFractionDigits: 2 });
+  const symbol = currency ? CURRENCY_FORMATS[currency] : undefined;
+  if (symbol) return `${symbol}${formatted}`;
+  return currency ? `${currency} ${formatted}` : formatted;
+}
+
+const ACCOUNT_NAMES: Record<string, string> = {
+  meezan: "Meezan",
+  hbl: "HBL",
+  hbl_islamic: "HBL",
+  faysal: "Faysal Bank",
+  ubl: "UBL",
+  alfalah: "Bank Alfalah",
+  payoneer: "Payoneer",
+  wise: "Wise",
+  upwork: "Upwork",
+  nayapay: "NayaPay",
+  jazzcash: "JazzCash",
+  sadapay: "SadaPay",
+};
+
+// Tokens that describe a payment route rather than a traditional bank account.
+const ROUTE_TOKENS = new Set(["payoneer", "wise", "upwork", "jazzcash"]);
+
+const INCOME_SOURCE_LABELS: Record<string, string> = {
+  upwork: "Upwork",
+  fiverr: "Fiverr",
+  marketplace: "Marketplace / platform",
+  direct_client: "Direct client",
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+  it_ites: "IT / ITeS",
+  design_creative: "Design / Creative",
+  other: "Other services",
+};
+
+/**
+ * Converts the backend's normalizedContext into the editable "Here's what I
+ * understood" cards. This is display-only — the stored normalizedContext
+ * stays the source of truth for the compare call.
+ */
+export function fieldsFromContext(context: AnalyzePaymentContext): PaymentField[] {
+  const tokens = context.existingAccounts ?? [];
+  const banks = [
+    ...new Set(
+      tokens
+        .filter((token) => !ROUTE_TOKENS.has(token))
+        .map((token) => ACCOUNT_NAMES[token] ?? token),
+    ),
+  ];
+  const routes = [
+    ...new Set(
+      tokens
+        .filter((token) => ROUTE_TOKENS.has(token))
+        .map((token) => ACCOUNT_NAMES[token] ?? token),
+    ),
+  ];
+
+  const keepFx =
+    context.fxRetentionPreference === "required"
+      ? "Yes"
+      : context.fxRetentionPreference === "preferred"
+        ? "Preferred"
+        : "No";
+  const islamic =
+    context.islamicBankingPreference === "required"
+      ? "Required"
+      : context.islamicBankingPreference === "preferred"
+        ? "Preferred"
+        : "No preference";
+  const timing =
+    context.timingRequirement === "flexible"
+      ? "Timing is flexible"
+      : context.urgency === "today"
+        ? "Payment due today"
+        : context.urgency === "this_week"
+          ? "Due this week"
+          : "Not specified";
+
+  return [
+    {
+      label: "Client",
+      value: (COUNTRY_NAMES[context.clientCountry] ?? context.clientCountry) || "Not specified",
+    },
+    { label: "Amount", value: formatAmount(context.amount, context.currency) },
+    {
+      label: "Payment source",
+      value: INCOME_SOURCE_LABELS[context.incomeSource] ?? "Direct client",
+    },
+    { label: "Work", value: context.serviceDescription || "Freelance services" },
+    { label: "Category", value: CATEGORY_LABELS[context.serviceCategory] ?? "Other services" },
+    {
+      label: "PSEB",
+      value:
+        context.psebStatus === "registered"
+          ? "Registered"
+          : context.psebStatus === "not_registered"
+            ? "Not registered"
+            : "Not sure",
+    },
+    { label: "Current bank", value: banks.join(", ") || "Not specified" },
+    { label: "Existing payment route", value: routes.join(", ") || "None mentioned" },
+    { label: "Keep foreign currency", value: keepFx },
+    { label: "Islamic banking", value: islamic },
+    { label: "Timing", value: timing },
+  ];
+}
+
 export function buildAnalysisContext(
   fields: PaymentField[],
   prompt: string,
