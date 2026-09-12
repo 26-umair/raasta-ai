@@ -146,16 +146,16 @@ export async function analyzePayment(
     throw new Error(GENERIC_FAILURE);
   }
 
-  const payload = {
+  const requestBody = {
     type: "analyze_payment",
     context,
     assumptions: { asOfDate: ANALYSIS_AS_OF_DATE },
   };
-  console.log("Compare payload", payload);
+  console.log("Compare payload", requestBody);
 
   const { data, error } = await externalSupabase.functions.invoke<AnalyzePaymentResponse>(
     "analyze-payment",
-    { body: payload },
+    { body: requestBody },
   );
 
   console.log("Compare response", data);
