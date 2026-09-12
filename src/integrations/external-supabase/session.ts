@@ -1,8 +1,8 @@
 // Minimal connectivity layer for the user's external Supabase project.
 // Anonymous session + edge-function invocation. No login UI, no tables,
 // no Lovable Cloud auth, no service-role/secret keys.
-import type { Session } from '@supabase/supabase-js';
-import { externalSupabase } from './client';
+import type { Session } from "@supabase/supabase-js";
+import { externalSupabase } from "./client";
 
 /**
  * Returns a valid session for the external Supabase project.
@@ -20,7 +20,7 @@ export async function getExternalSession(): Promise<Session> {
   const { data, error } = await externalSupabase.auth.signInAnonymously();
   if (error) throw error;
   if (!data.session) {
-    throw new Error('Anonymous sign-in did not return a session.');
+    throw new Error("Anonymous sign-in did not return a session.");
   }
   return data.session;
 }
@@ -32,8 +32,8 @@ export async function getExternalSession(): Promise<Session> {
 export async function invokeAnalyzePaymentHealthCheck(): Promise<unknown> {
   await getExternalSession();
 
-  const { data, error } = await externalSupabase.functions.invoke('analyze-payment', {
-    body: { type: 'health_check' },
+  const { data, error } = await externalSupabase.functions.invoke("analyze-payment", {
+    body: { type: "health_check" },
   });
 
   if (error) throw error;

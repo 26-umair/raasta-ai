@@ -1,21 +1,18 @@
-import { useState, type ComponentType } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
+  AlertTriangle,
   ArrowRight,
   Building2,
   Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  CircleDollarSign,
   Clipboard,
   Copy,
-  Landmark,
   Mail,
-  Route,
   ShieldCheck,
-  Timer,
-  WalletCards,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -26,63 +23,109 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { SectionHeading, StatusBadge } from "./shared";
+import type {
+  AnalyzePaymentContext,
+  ContextFact,
+  RouteOption,
+} from "@/integrations/external-supabase/analyze-payment";
+import { SectionHeading, StatusBadge, type StatusType } from "./shared";
 import { copyText } from "./clipboard";
-import { getPaymentValue, usePaymentContext, type PaymentField } from "./payment-context";
+import { getPaymentValue, usePaymentContext } from "./payment-context";
 
-const immediate = {
-  title: "Payoneer → Meezan",
-  reason:
-    "Best fit for this payment because it's due today and you already have this setup available.",
-  route: ["UK Client", "Payoneer", "Meezan Bank"],
-};
-const optimal = {
-  title: "Meezan Freelancer Account + ESFCA",
-  reason:
-    "Better for recurring IT export income because it matches your foreign-currency goal, Islamic banking preference and documentation needs.",
-  route: ["UK Client", "Bank transfer", "Meezan Freelancer + ESFCA"],
+const SAME_DAY_GUARDRAIL = "same_day_receipt_not_confidently_available";
+
+function routeSteps(routeName: string) {
+  return routeName
+    .split("→")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function scoreLabel(value: number | undefined, labels: [string, string, string]) {
+  const score = value ?? 0;
+  if (score >= 0.8) return labels[0];
+  if (score >= 0.45) return labels[1];
+  return labels[2];
+}
+
+function factStatus(status: string): { type: StatusType; label: string } {
+  if (status === "user_confirmed") return { type: "detected", label: "User confirmed" };
+  if (status === "needs_verification") return { type: "needs", label: "Needs verification" };
+  if (status === "verified") return { type: "verified", label: "Verified" };
+  return { type: "detected", label: "Detected" };
+}
+
+const FACT_LABELS: Record<string, string> = {
+  amount: "Amount",
+  currency: "Currency",
+  clientCountry: "Client country",
+  incomeSource: "Payment source",
+  serviceCategory: "Service category",
+  psebStatus: "PSEB status",
+  clientCanUse: "Client can pay with",
+  timingRequirement: "Timing requirement",
 };
 
 export function RecommendationPage({ startsFlexible = false }: { startsFlexible?: boolean }) {
   const payment = usePaymentContext();
-  const [flexible, setFlexible] = useState(startsFlexible);
+  const { analysis } = payment;
+  const result = analysis.result;
+  const baseRequest = useRef<AnalyzePaymentContext | undefined>(undefined);
+  if (!baseRequest.current && analysis.request) baseRequest.current = analysis.request;
+
+  const [waitTwoDays, setWaitTwoDays] = useState(startsFlexible);
   const [noFx, setNoFx] = useState(false);
   const [noIslamic, setNoIslamic] = useState(false);
   const [instructions, setInstructions] = useState(false);
   const [copied, setCopied] = useState<string>();
   const [simple, setSimple] = useState(false);
   const [copyError, setCopyError] = useState(false);
-  const amount = getPaymentValue(payment.fields, "Amount", "£2,500");
-  const country = getPaymentValue(payment.fields, "Client", "United Kingdom");
-  const work = getPaymentValue(payment.fields, "Work", "Web development");
-  const bank = getPaymentValue(payment.fields, "Current bank", "Meezan");
-  const source = getPaymentValue(payment.fields, "Payment source", "Direct client");
-  const existingRoute = getPaymentValue(payment.fields, "Existing payment route", "Payoneer");
-  const hasMeezan = bank.toLowerCase().includes("meezan");
-  const routeProvider = existingRoute.toLowerCase().includes("upwork")
-    ? "Upwork withdrawal"
-    : existingRoute.toLowerCase().includes("wise") || source.toLowerCase().includes("wise")
-      ? "Wise"
-      : existingRoute;
-  const currentRoute = {
-    ...immediate,
-    title: `${routeProvider} → ${bank}`,
-    reason: `Best-fit mock example for this payment because ${payment.urgency === "today" ? "timing is the main constraint" : "it uses the context you provided"}.`,
-    route: [`${country} client`, routeProvider, `${bank} Bank`],
+  const [updated, setUpdated] = useState(false);
+
+  const amount = getPaymentValue(payment.fields, "Amount", "—");
+  const country = getPaymentValue(payment.fields, "Client", "Not specified");
+  const work = getPaymentValue(payment.fields, "Work", "Freelance work");
+  const bank = getPaymentValue(payment.fields, "Current bank", "your bank");
+
+  const applySensitivity = async (next: { wait?: boolean; fx?: boolean; islamic?: boolean }) => {
+    const base = baseRequest.current;
+    if (!base) return;
+    const wait = next.wait ?? waitTwoDays;
+    const fx = next.fx ?? noFx;
+    const islamic = next.islamic ?? noIslamic;
+    setWaitTwoDays(wait);
+    setNoFx(fx);
+    setNoIslamic(islamic);
+    const patch: AnalyzePaymentContext = { ...base };
+    if (wait) {
+      patch.timingRequirement = "flexible";
+      patch.urgency = "not_urgent";
+    }
+    if (fx) patch.fxRetentionPreference = "no_preference";
+    if (islamic) patch.islamicBankingPreference = "no_preference";
+    const outcome = await payment.runAnalysis(patch);
+    if (outcome) setUpdated(wait || fx || islamic);
   };
-  const futureBank = hasMeezan ? "Meezan Freelancer Account + ESFCA" : "Freelancer Account + ESFCA";
-  const futureRoute = {
-    ...optimal,
-    title: futureBank,
-    reason: `A longer-term mock option aligned with your foreign-currency, banking and documentation preferences.`,
-    route: [`${country} client`, "Bank transfer", futureBank],
-  };
-  const best = flexible ? futureRoute : currentRoute;
+
+  useEffect(() => {
+    if (!analysis.loading && !analysis.result && !analysis.error) setUpdated(false);
+  }, [analysis.error, analysis.loading, analysis.result]);
+
+  const bestNow = result?.bestNow ?? null;
+  const bestLongTerm = result?.bestLongTerm ?? null;
+  const sameDayBlocked = Boolean(
+    result?.guardrails.some((guardrail) => guardrail.code === SAME_DAY_GUARDRAIL),
+  );
+  const warnings = (result?.guardrails ?? []).filter(
+    (guardrail) => guardrail.severity === "warning" || guardrail.severity === "error",
+  );
+
+  const routeName = bestNow?.routeName ?? "";
   const fullOpening =
-    "Hi Sarah, here's the recommended way to pay this invoice. Please use the payment details provided below and include the invoice reference so the payment can be identified correctly.";
+    "Hi, here's the recommended way to pay this invoice. Please use the payment details provided below and include the invoice reference so the payment can be identified correctly.";
   const simpleMessage =
-    "Hi Sarah, please use the payment details below for this invoice and include the invoice reference when sending the payment. Let me know once it's sent. Thank you.";
-  const detailsText = `Payment method: ${routeProvider} receiving details\nAccount name: YOUR NAME\nInvoice reference: INV-XXXX\nAmount: ${amount}`;
+    "Hi, please use the payment details below for this invoice and include the invoice reference when sending the payment. Let me know once it's sent. Thank you.";
+  const detailsText = `Payment method: ${routeName} receiving details\nAccount name: YOUR NAME\nInvoice reference: INV-XXXX\nAmount: ${amount}`;
   const displayedMessage = simple
     ? `${simpleMessage}\n\n${detailsText}`
     : `${fullOpening}\n\n${detailsText}\n\nThank you — please let me know once the payment is sent.`;
@@ -94,6 +137,25 @@ export function RecommendationPage({ startsFlexible = false }: { startsFlexible?
     setCopied(kind);
     window.setTimeout(() => setCopied(undefined), 1600);
   };
+
+  if (!result && !analysis.loading) {
+    return (
+      <div className="page-shell centered-state">
+        <div className="empty-state">
+          <Sparkles />
+          <h1>No analysis yet</h1>
+          <p>
+            {analysis.error ??
+              "Describe your payment on Ask Raasta and I'll compare the routes for you."}
+          </p>
+          <Link to="/" className="text-action">
+            Start on Ask Raasta
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page-shell recommendation-page">
       <header className="payment-header">
@@ -102,11 +164,6 @@ export function RecommendationPage({ startsFlexible = false }: { startsFlexible?
           <h1>
             <span className="money">{amount}</span> · {country} → Pakistan · {work}
           </h1>
-          {payment.scenario !== "golden" && (
-            <p className="mock-context-note">
-              Mock recommendation example based on the selected scenario.
-            </p>
-          )}
         </div>
         <div className="payment-actions">
           <Link to="/" className="text-action">
@@ -117,117 +174,166 @@ export function RecommendationPage({ startsFlexible = false }: { startsFlexible?
             type="button"
             onClick={() => window.dispatchEvent(new Event("raasta:open-sources"))}
           >
-            <ShieldCheck /> Verified rules · Sep 12, 2026
+            <ShieldCheck /> Rule sources · Sep 12, 2026
           </button>
         </div>
       </header>
-      {flexible && (
+
+      {analysis.loading && (
         <div className="update-note" role="status">
           <CheckCircle2 />
           <span>
-            <strong>Recommendation updated</strong> because urgency is no longer the main
-            constraint.
+            <strong>Updating recommendation</strong> with your change…
           </span>
         </div>
       )}
+      {!analysis.loading && updated && (
+        <div className="update-note" role="status">
+          <CheckCircle2 />
+          <span>
+            <strong>Recommendation updated</strong> using your adjusted preferences.
+          </span>
+        </div>
+      )}
+      {analysis.error && (
+        <div className="analysis-error" role="status">
+          <p>{analysis.error}</p>
+          <Button onClick={() => void applySensitivity({})}>Retry</Button>
+        </div>
+      )}
+
       <SectionHeading
         title="Best route for this payment"
-        description="Ranked for your current timing, setup and preferences."
+        description="Ranked by Raasta's Pakistan route engine for your timing, setup and preferences."
       />
-      <div className={cn("recommendation-grid", flexible && "reranked")}>
-        <RouteCard kind="best" data={best} flexible={flexible} />
-        {!flexible && <LongTermCard title={futureBank} />}
+      <div className={cn("recommendation-grid", updated && "reranked")}>
+        {bestNow ? (
+          <RouteCard route={bestNow} />
+        ) : (
+          <NoRouteCard
+            sameDay={sameDayBlocked}
+            onRelax={() => void applySensitivity({ wait: true })}
+          />
+        )}
+        {bestLongTerm && <LongTermCard route={bestLongTerm} />}
       </div>
+
+      {warnings.length > 0 && (
+        <section className="section-block">
+          <SectionHeading
+            title="Things Raasta will not assume"
+            description="Limits the engine applies instead of guessing."
+          />
+          <div className="alternatives">
+            {warnings.map((guardrail) => (
+              <article className="alternative-card" key={guardrail.code}>
+                <span>
+                  <AlertTriangle /> Important
+                </span>
+                <h3>{guardrail.title}</h3>
+                <p>{guardrail.message}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="section-block">
         <SectionHeading
           title="Why Raasta chose this"
           description="The recommendation changes when your situation changes."
         />
         <div className="reasoning-chain">
-          {(
-            [
-              [
-                payment.urgency === "today" ? "Payment due today" : "Timing is flexible",
-                payment.urgency === "today" ? "Speed matters most" : "Setup can be optimized",
-                Timer,
-              ],
-              [`${routeProvider} available`, "Current mock route", WalletCards],
-              [
-                "Retain foreign currency",
-                getPaymentValue(payment.fields, "Keep foreign currency", "Yes"),
-                CircleDollarSign,
-              ],
-              [
-                "Islamic banking",
-                getPaymentValue(payment.fields, "Islamic banking", "Preferred"),
-                Landmark,
-              ],
-              ["Best Now", flexible ? "Optimal setup" : "Available route", Route],
-            ] as Array<[string, string, ComponentType<{ className?: string }>]>
-          ).map(([title, text, Icon], index) => (
-            <div className="reason-step" key={title}>
+          {(bestNow ?? bestLongTerm)?.reasons.slice(0, 5).map((reason, index, list) => (
+            <div className="reason-step" key={reason}>
               <div>
-                <Icon />
+                <Check />
                 <span>{index + 1}</span>
               </div>
-              <strong>{title}</strong>
-              <small>{text}</small>
-              {index < 4 && <ChevronRight className="reason-arrow" />}
+              <strong>Reason {index + 1}</strong>
+              <small>{reason}</small>
+              {index < list.length - 1 && <ChevronRight className="reason-arrow" />}
             </div>
           ))}
         </div>
+        {(bestNow ?? bestLongTerm)?.tradeoffs.length ? (
+          <ul className="bank-question-list">
+            {(bestNow ?? bestLongTerm)?.tradeoffs.map((tradeoff) => (
+              <li key={tradeoff}>{tradeoff}</li>
+            ))}
+          </ul>
+        ) : null}
       </section>
+
       <section className="section-block sensitivity">
         <SectionHeading
           title="What would change my recommendation?"
-          description="Try a change to see how the ranking responds."
+          description="Each change is sent back to the engine and re-ranked."
         />
         <div className="toggle-row">
-          <ToggleChip selected={flexible} onClick={() => setFlexible(!flexible)}>
+          <ToggleChip
+            selected={waitTwoDays}
+            disabled={analysis.loading}
+            onClick={() => void applySensitivity({ wait: !waitTwoDays })}
+          >
             I can wait 2 days
           </ToggleChip>
-          <ToggleChip selected={noFx} onClick={() => setNoFx(!noFx)}>
+          <ToggleChip
+            selected={noFx}
+            disabled={analysis.loading}
+            onClick={() => void applySensitivity({ fx: !noFx })}
+          >
             I don't need to keep FX
           </ToggleChip>
-          <ToggleChip selected={noIslamic} onClick={() => setNoIslamic(!noIslamic)}>
+          <ToggleChip
+            selected={noIslamic}
+            disabled={analysis.loading}
+            onClick={() => void applySensitivity({ islamic: !noIslamic })}
+          >
             Islamic banking isn't required
           </ToggleChip>
         </div>
-        {(noFx || noIslamic) && (
-          <p className="sensitivity-note">
-            These preferences affect the reasoning, but urgency remains the deciding factor in this
-            mock scenario.
+        {result?.sensitivity.map((item) => (
+          <p className="sensitivity-note" key={item.label}>
+            {item.explanation}
           </p>
-        )}
+        ))}
       </section>
+
       <div className="info-accordions">
         <Disclosure title="🇵🇰 Pakistan Context" subtitle="Why local factors matter">
-          <PakistanContext />
+          <PakistanContext facts={result?.contextFacts ?? []} />
         </Disclosure>
         <Disclosure title="Estimated Cost Breakdown" subtitle="No fake precision">
-          <CostBreakdown />
+          <CostBreakdown route={bestNow ?? bestLongTerm} />
         </Disclosure>
       </div>
-      <section className="section-block">
-        <SectionHeading
-          title="Other routes worth knowing"
-          description="Only the closest alternatives for this payment."
-        />
-        <div className="alternatives">
-          <Alternative
-            title="Lowest estimated cost"
-            route="Direct bank transfer → freelancer account"
-            consider="May reduce provider costs and create a direct banking record."
-            notOne="Setup and intermediary charges are less predictable for today's payment."
+
+      {(result?.alternatives.length ?? 0) > 0 && (
+        <section className="section-block">
+          <SectionHeading
+            title="Other routes worth knowing"
+            description="The closest alternatives the engine ranked."
           />
-          <Alternative
-            title="Client-friendly alternative"
-            route="Client uses Wise → Pakistani personal account"
-            consider="Convenient for the sender and familiar to many UK clients."
-            notOne="It is less aligned with your foreign-currency and documentation priorities, and differs from holding Wise USD details."
-          />
-        </div>
-      </section>
+          <div className="alternatives">
+            {result?.alternatives.slice(0, 2).map((alternative) => (
+              <article className="alternative-card" key={alternative.routeId}>
+                <span>{alternative.mode === "now" ? "Usable now" : "Longer-term setup"}</span>
+                <h3>{alternative.routeName}</h3>
+                <div>
+                  <strong>Why consider it</strong>
+                  <p>{alternative.reasons[0] ?? "Ranked close to the recommended route."}</p>
+                </div>
+                <div>
+                  <strong>Why it wasn't #1</strong>
+                  <p>{alternative.tradeoffs[0] ?? "It scored lower on your priorities."}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
       <section className="next-steps">
         <SectionHeading
           title="What should I do next?"
@@ -248,7 +354,9 @@ export function RecommendationPage({ startsFlexible = false }: { startsFlexible?
                 <small>
                   {
                     [
-                      `Use ${best.title} for this mock payment.`,
+                      bestNow
+                        ? `Use ${bestNow.routeName} for this payment.`
+                        : `No same-day route is available — review ${bestLongTerm?.routeName ?? "the long-term setup"} or change your timing.`,
                       `Confirm your ${bank} receiving details before sharing them.`,
                       "Use a clear invoice reference so the payment can be identified.",
                       "Keep both together for your payment records.",
@@ -260,9 +368,11 @@ export function RecommendationPage({ startsFlexible = false }: { startsFlexible?
             </li>
           ))}
         </ol>
-        <Button size="lg" onClick={() => setInstructions(true)}>
-          <Mail /> Generate Instructions for Client
-        </Button>
+        {bestNow && (
+          <Button size="lg" onClick={() => setInstructions(true)}>
+            <Mail /> Generate Instructions for Client
+          </Button>
+        )}
       </section>
       <p className="disclaimer">
         Raasta provides informational guidance only. Fees, timing, tax and regulatory outcomes
@@ -273,7 +383,7 @@ export function RecommendationPage({ startsFlexible = false }: { startsFlexible?
           <SheetHeader>
             <SheetTitle>Client Payment Instructions</SheetTitle>
             <SheetDescription>
-              A ready-to-share mock message using placeholder details only.
+              A ready-to-share message using placeholder details only.
             </SheetDescription>
           </SheetHeader>
           <div className="message-preview">
@@ -281,7 +391,7 @@ export function RecommendationPage({ startsFlexible = false }: { startsFlexible?
             <dl>
               <div>
                 <dt>Payment method</dt>
-                <dd>{routeProvider} receiving details</dd>
+                <dd>{routeName} receiving details</dd>
               </div>
               <div>
                 <dt>Account name</dt>
@@ -325,71 +435,101 @@ export function RecommendationPage({ startsFlexible = false }: { startsFlexible?
   );
 }
 
-function RouteCard({
-  data,
-  flexible,
-}: {
-  kind: "best";
-  data: typeof immediate;
-  flexible: boolean;
-}) {
+function RouteCard({ route }: { route: RouteOption }) {
+  const steps = routeSteps(route.routeName);
   return (
     <article className="route-card primary-route">
       <div className="route-card-top">
         <span className="route-badge">BEST NOW</span>
         <StatusBadge type="estimated" help="Timing and cost may vary by account and transaction." />
       </div>
-      <h2>{data.title}</h2>
-      <p>{data.reason}</p>
+      <h2>{route.routeName}</h2>
+      <p>{route.reasons[0] ?? "Ranked highest for your current setup."}</p>
       <div className="route-flow">
-        {data.route.map((node, index) => (
+        {steps.map((node, index) => (
           <div key={node} className="route-flow-part">
             <span>
               <Building2 />
               {node}
             </span>
-            {index < data.route.length - 1 && <ArrowRight />}
+            {index < steps.length - 1 && <ArrowRight />}
           </div>
         ))}
       </div>
       <div className="route-metrics">
-        <Metric label="Cost" value="Estimated" type="estimated" />
-        <Metric label="Speed" value={flexible ? "Setup first" : "1–3 days"} type="estimated" />
+        <Metric
+          label="Cost"
+          value={route.cost.certainty === "estimated" ? "Estimated" : route.cost.certainty}
+          type="estimated"
+        />
+        <Metric
+          label="Timing fit"
+          value={scoreLabel(route.breakdown["urgency"], ["Strong", "Moderate", "Limited"])}
+          type="estimated"
+        />
         <Metric
           label="Keep foreign currency"
-          value={flexible ? "Supported" : "Limited"}
-          type="verified"
+          value={scoreLabel(route.breakdown["fxRetention"], ["Supported", "Partial", "Limited"])}
+          type={(route.breakdown["fxRetention"] ?? 0) >= 0.8 ? "verified" : "needs"}
         />
         <Metric
           label="Payment records"
-          value={flexible ? "Stronger setup" : "May need verification"}
-          type={flexible ? "verified" : "needs"}
+          value={scoreLabel(route.breakdown["documentation"], [
+            "Strong",
+            "Workable",
+            "May need verification",
+          ])}
+          type={(route.breakdown["documentation"] ?? 0) >= 0.8 ? "verified" : "needs"}
         />
       </div>
     </article>
   );
 }
-function LongTermCard({ title }: { title: string }) {
+
+function NoRouteCard({ sameDay, onRelax }: { sameDay: boolean; onRelax: () => void }) {
+  return (
+    <article className="route-card primary-route">
+      <div className="route-card-top">
+        <span className="route-badge">BEST NOW</span>
+        <StatusBadge type="needs" help="Raasta will not label an uncertain route as same-day." />
+      </div>
+      <h2>
+        {sameDay
+          ? "No route can be confidently recommended for same-day receipt"
+          : "No route can be confidently recommended right now"}
+      </h2>
+      <p>
+        The routes Raasta models do not confidently get funds into your account today. If your
+        client only needs to send the payment today, change the timing requirement and compare
+        again.
+      </p>
+      <div className="drawer-actions">
+        <Button variant="outline" onClick={onRelax}>
+          Compare with flexible timing
+        </Button>
+        <Link to="/" className="text-action">
+          Edit timing or context
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function LongTermCard({ route }: { route: RouteOption }) {
   return (
     <article className="route-card long-term">
       <div className="route-card-top">
         <span className="route-badge soft">BEST LONG-TERM</span>
       </div>
-      <h2>{title}</h2>
-      <p>{optimal.reason}</p>
+      <h2>{route.routeName}</h2>
+      <p>{route.reasons[0] ?? "A stronger setup for recurring export income."}</p>
       <ul className="benefit-list">
-        <li>
-          <Check />
-          Keep foreign currency
-        </li>
-        <li>
-          <Check />
-          Banking preference considered
-        </li>
-        <li>
-          <Check />
-          Stronger export setup
-        </li>
+        {route.reasons.slice(1, 4).map((reason) => (
+          <li key={reason}>
+            <Check />
+            {reason}
+          </li>
+        ))}
       </ul>
       <p className="term-helper">
         <strong>ESFCA</strong> is a linked account that can let eligible exporters retain part of
@@ -398,6 +538,7 @@ function LongTermCard({ title }: { title: string }) {
     </article>
   );
 }
+
 function Metric({
   label,
   value,
@@ -415,7 +556,7 @@ function Metric({
         type={type}
         help={
           type === "verified"
-            ? "Grounded in the current mock rule set."
+            ? "Grounded in the engine's current rule set."
             : type === "estimated"
               ? "This can vary by provider, account or timing."
               : "Your exact setup should be confirmed."
@@ -424,19 +565,23 @@ function Metric({
     </div>
   );
 }
+
 function ToggleChip({
   selected,
   onClick,
+  disabled,
   children,
 }: {
   selected: boolean;
   onClick: () => void;
+  disabled?: boolean;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       aria-pressed={selected}
+      disabled={disabled}
       className={cn("toggle-chip", selected && "selected")}
       onClick={onClick}
     >
@@ -445,65 +590,23 @@ function ToggleChip({
     </button>
   );
 }
-function PakistanContext() {
-  const { fields } = usePaymentContext();
-  const rows = [
-    [
-      "PSEB",
-      getPaymentValue(fields, "PSEB", "Registered"),
-      "Relevant to the freelancer context you provided.",
-      "verified",
-    ],
-    [
-      "Service category",
-      getPaymentValue(fields, "Category", "IT / ITeS"),
-      `Detected from ${getPaymentValue(fields, "Work", "web development")}.`,
-      "detected",
-    ],
-    [
-      "Payment-purpose context",
-      "9186",
-      "A purpose code associated with freelance computer and information services.",
-      "likely",
-    ],
-    [
-      "Foreign-currency retention",
-      getPaymentValue(fields, "Keep foreign currency", "Yes"),
-      "Your preference can make freelancer account / ESFCA options more relevant.",
-      "verified",
-    ],
-    [
-      "Islamic banking",
-      getPaymentValue(fields, "Islamic banking", "Preferred"),
-      "Based on the preference entered in this mock.",
-      "verified",
-    ],
-    [
-      "Tax",
-      "Needs professional verification",
-      "Confirm your personal treatment with a qualified professional.",
-      "needs",
-    ],
-  ] as const;
+
+function PakistanContext({ facts }: { facts: ContextFact[] }) {
   return (
     <div className="context-list">
-      {rows.map(([label, value, helper, status]) => (
-        <div key={label}>
-          <div>
-            <span>{label}</span>
-            <strong className={label.includes("purpose") ? "money" : ""}>{value}</strong>
-            <p>{helper}</p>
+      {facts.map((fact) => {
+        const status = factStatus(fact.status);
+        return (
+          <div key={fact.field}>
+            <div>
+              <span>{FACT_LABELS[fact.field] ?? fact.field}</span>
+              <strong>{fact.value}</strong>
+              <p>{fact.note ?? "Used by the engine when ranking your routes."}</p>
+            </div>
+            <StatusBadge type={status.type} label={status.label} />
           </div>
-          <StatusBadge
-            type={status}
-            label={
-              status === "verified" && label === "Foreign-currency retention"
-                ? "Verified rule"
-                : undefined
-            }
-          />
-        </div>
-      ))}
+        );
+      })}
       <p className="legal-note">
         Raasta provides informational guidance only. Tax and regulatory outcomes should be verified
         with qualified professionals or the relevant institution.
@@ -511,15 +614,22 @@ function PakistanContext() {
     </div>
   );
 }
-function CostBreakdown() {
-  const { fields } = usePaymentContext();
-  const amount = getPaymentValue(fields, "Amount", "£2,500");
+
+function CostBreakdown({ route }: { route: RouteOption | null }) {
+  if (!route) return <p className="helper-text">No cost view is available without a route.</p>;
+  const { cost } = route;
+  const range = (min: number | null, max: number | null) =>
+    min === null && max === null
+      ? "Estimated"
+      : `${min ?? "?"} – ${max ?? "?"} ${cost.grossCurrency ?? ""}`.trim();
   const rows: Array<[string, string]> = [
-    ["Client sends", amount],
-    ["Provider fee", "Estimated"],
+    [
+      "Client sends",
+      cost.grossAmount !== null ? `${cost.grossAmount} ${cost.grossCurrency ?? ""}`.trim() : "—",
+    ],
+    ["Provider fee", range(cost.feeMin, cost.feeMax)],
     ["Bank / intermediary charges", "Variable"],
-    ["FX effect", "Estimated"],
-    ["Estimated amount received", "A range will appear when verified data is available"],
+    ["Estimated amount in PKR", range(cost.estimatedPkrMin, cost.estimatedPkrMax)],
   ];
   return (
     <div className="cost-grid">
@@ -529,36 +639,10 @@ function CostBreakdown() {
           <strong className={label === "Client sends" ? "money" : ""}>{value}</strong>
         </div>
       ))}
-      <p>
-        Final fees and exchange rates depend on the provider, bank, account and transaction timing.
-      </p>
+      {cost.notes.map((note) => (
+        <p key={note}>{note}</p>
+      ))}
     </div>
-  );
-}
-function Alternative({
-  title,
-  route,
-  consider,
-  notOne,
-}: {
-  title: string;
-  route: string;
-  consider: string;
-  notOne: string;
-}) {
-  return (
-    <article className="alternative-card">
-      <span>{title}</span>
-      <h3>{route}</h3>
-      <div>
-        <strong>Why consider it</strong>
-        <p>{consider}</p>
-      </div>
-      <div>
-        <strong>Why it wasn't #1</strong>
-        <p>{notOne}</p>
-      </div>
-    </article>
   );
 }
 
