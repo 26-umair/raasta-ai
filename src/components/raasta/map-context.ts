@@ -152,8 +152,7 @@ export function fieldsFromContext(context: AnalyzePaymentContext): PaymentField[
     .filter(Boolean);
   const banks = accounts.filter(
     (name, index) =>
-      !ROUTE_TOKENS.has(context.existingAccounts[index]) &&
-      accounts.indexOf(name) === index,
+      !ROUTE_TOKENS.has(context.existingAccounts[index]) && accounts.indexOf(name) === index,
   );
   const routes = context.existingAccounts
     .filter((token) => ROUTE_TOKENS.has(token))
@@ -181,9 +180,15 @@ export function fieldsFromContext(context: AnalyzePaymentContext): PaymentField[
           : "Not specified";
 
   return [
-    { label: "Client", value: COUNTRY_NAMES[context.clientCountry] ?? context.clientCountry || "Not specified" },
+    {
+      label: "Client",
+      value: (COUNTRY_NAMES[context.clientCountry] ?? context.clientCountry) || "Not specified",
+    },
     { label: "Amount", value: formatAmount(context.amount, context.currency) },
-    { label: "Payment source", value: INCOME_SOURCE_LABELS[context.incomeSource] ?? "Direct client" },
+    {
+      label: "Payment source",
+      value: INCOME_SOURCE_LABELS[context.incomeSource] ?? "Direct client",
+    },
     { label: "Work", value: context.serviceDescription || "Freelance services" },
     { label: "Category", value: CATEGORY_LABELS[context.serviceCategory] ?? "Other services" },
     {

@@ -199,11 +199,7 @@ export function AskRaastaPage() {
               <span>
                 <ShieldCheck className="mini-shield" /> Compared by Raasta's Pakistan route engine
               </span>
-              <Button
-                size="lg"
-                onClick={() => void startExtraction()}
-                disabled={!prompt.trim()}
-              >
+              <Button size="lg" onClick={() => void startExtraction()} disabled={!prompt.trim()}>
                 Find My Best Route <ArrowRight />
               </Button>
             </div>

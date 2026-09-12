@@ -149,9 +149,7 @@ export type ExtractPaymentResponse = {
  * `normalizedContext` (source of truth for the compare call) plus the result.
  * Throws a user-safe Error on any failure — never fabricates context.
  */
-export async function extractPayment(
-  message: string,
-): Promise<{
+export async function extractPayment(message: string): Promise<{
   normalizedContext: AnalyzePaymentContext;
   result?: AnalyzePaymentResult;
   engineVersion?: string;
