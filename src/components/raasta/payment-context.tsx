@@ -107,9 +107,22 @@ export function PaymentContextProvider({ children }: { children: ReactNode }) {
     setAnalysis({ loading: false });
   }, []);
 
+  const storeExtraction = useCallback((context: AnalyzePaymentContext) => {
+    requestId.current += 1;
+    setAnalysis({ loading: false, request: context });
+  }, []);
+
   const value = useMemo(
-    () => ({ ...draft, setDraft, analysis, runAnalysis, patchAnalysis, resetAnalysis }),
-    [analysis, draft, patchAnalysis, resetAnalysis, runAnalysis],
+    () => ({
+      ...draft,
+      setDraft,
+      analysis,
+      runAnalysis,
+      patchAnalysis,
+      resetAnalysis,
+      storeExtraction,
+    }),
+    [analysis, draft, patchAnalysis, resetAnalysis, runAnalysis, storeExtraction],
   );
   return <PaymentContext.Provider value={value}>{children}</PaymentContext.Provider>;
 }
