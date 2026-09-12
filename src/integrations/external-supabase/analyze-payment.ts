@@ -116,6 +116,12 @@ export type AnalyzePaymentResult = {
   sensitivity: SensitivityItem[];
   validation: { valid: boolean; issues: ValidationIssue[] };
   contextFacts: ContextFact[];
+  // Optional newer contract fields — read defensively; may be absent.
+  trustFacts?: ContextFact[];
+  pakistanContext?: Array<{ title: string; detail: string } | string>;
+  evidence?: Array<{ label: string; source?: string; note?: string } | string>;
+  clientInstructions?: { full?: string; simple?: string; email?: string };
+  disclaimers?: string[];
 };
 
 export type AnalyzePaymentResponse = {
@@ -140,17 +146,23 @@ export async function analyzePayment(
     throw new Error(GENERIC_FAILURE);
   }
 
+  const payload = {
+    type: "analyze_payment",
+    context,
+    assumptions: { asOfDate: ANALYSIS_AS_OF_DATE },
+  };
+  console.log("Compare payload", payload);
+
   const { data, error } = await externalSupabase.functions.invoke<AnalyzePaymentResponse>(
     "analyze-payment",
-    {
-      body: {
-        type: "analyze_payment",
-        context,
-        assumptions: { asOfDate: ANALYSIS_AS_OF_DATE },
-      },
-    },
+    { body: payload },
   );
 
+  console.log("Compare response", data);
+  console.log("Compare error", error);
+
+  // Failure only when: invoke error, ok === false, or missing result.
+  // A null bestNow with ok === true is a valid clarification/guardrail state.
   if (error) {
     console.error("[analyze-payment] invoke failed", error);
     throw new Error(GENERIC_FAILURE);
