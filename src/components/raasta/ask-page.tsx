@@ -62,9 +62,7 @@ export function AskRaastaPage() {
       ...buildAnalysisContext(fields, prompt),
       urgency: (urgency === "today" ? "today" : "not_urgent") as "today" | "not_urgent",
       // Normalized enum only — never the display label.
-      timingRequirement: (urgency === "today" ? "unknown" : "flexible") as
-        | "unknown"
-        | "flexible",
+      timingRequirement: (urgency === "today" ? "unknown" : "flexible") as "unknown" | "flexible",
     };
     setStage("loading");
     handleResult(await payment.runAnalysis(context));
