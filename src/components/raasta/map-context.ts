@@ -150,12 +150,16 @@ export function fieldsFromContext(context: AnalyzePaymentContext): PaymentField[
   const tokens = context.existingAccounts ?? [];
   const banks = [
     ...new Set(
-      tokens.filter((token) => !ROUTE_TOKENS.has(token)).map((token) => ACCOUNT_NAMES[token] ?? token),
+      tokens
+        .filter((token) => !ROUTE_TOKENS.has(token))
+        .map((token) => ACCOUNT_NAMES[token] ?? token),
     ),
   ];
   const routes = [
     ...new Set(
-      tokens.filter((token) => ROUTE_TOKENS.has(token)).map((token) => ACCOUNT_NAMES[token] ?? token),
+      tokens
+        .filter((token) => ROUTE_TOKENS.has(token))
+        .map((token) => ACCOUNT_NAMES[token] ?? token),
     ),
   ];
 
