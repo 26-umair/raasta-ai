@@ -2,9 +2,16 @@
 // Reads VITE_PUBLIC_SUPABASE_URL / VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY from .env.local.
 import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = import.meta.env["VITE_PUBLIC_SUPABASE_URL"] as string | undefined;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env["VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] as
-  string | undefined;
+// Publishable (anon) key for the user's own backend project — safe to ship in
+// browser code, like any anon key. Env vars override these when present.
+const FALLBACK_URL = "https://xacrnhxdmninvhftuyvh.supabase.co";
+const FALLBACK_PUBLISHABLE_KEY = "sb_publishable_BSYG3a2kbqXVZd6ezvmRAw_lKnHnWIx";
+
+const SUPABASE_URL =
+  (import.meta.env["VITE_PUBLIC_SUPABASE_URL"] as string | undefined) ?? FALLBACK_URL;
+const SUPABASE_PUBLISHABLE_KEY =
+  (import.meta.env["VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] as string | undefined) ??
+  FALLBACK_PUBLISHABLE_KEY;
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");

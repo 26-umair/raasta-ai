@@ -61,10 +61,26 @@ export function AskRaastaPage() {
     const context = {
       ...buildAnalysisContext(fields, prompt),
       urgency: (urgency === "today" ? "today" : "not_urgent") as "today" | "not_urgent",
+      // Normalized enum only — never the display label.
+      timingRequirement: (urgency === "today" ? "unknown" : "flexible") as "unknown" | "flexible",
     };
     setStage("loading");
     handleResult(await payment.runAnalysis(context));
   }, [fields, handleResult, payment, prompt, scenario, urgency]);
+
+  // Keep the visible Timing card in sync with the chosen urgency.
+  const selectUrgency = useCallback((next: "today" | "flexible") => {
+    setUrgency(next);
+    setFields((current) => {
+      const label = next === "today" ? "Payment due today" : "Timing is flexible";
+      if (current.some((field) => field.label === "Timing")) {
+        return current.map((field) =>
+          field.label === "Timing" ? { ...field, value: label } : field,
+        );
+      }
+      return [...current, { label: "Timing", value: label }];
+    });
+  }, []);
 
   const answerClarification = useCallback(
     async (patch: Record<string, unknown>) => {
@@ -234,14 +250,14 @@ export function AskRaastaPage() {
               <button
                 type="button"
                 className={urgency === "today" ? "selected" : ""}
-                onClick={() => setUrgency("today")}
+                onClick={() => selectUrgency("today")}
               >
                 <Check /> This payment is due today
               </button>
               <button
                 type="button"
                 className={urgency === "flexible" ? "selected" : ""}
-                onClick={() => setUrgency("flexible")}
+                onClick={() => selectUrgency("flexible")}
               >
                 <Check /> Timing is flexible
               </button>
