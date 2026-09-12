@@ -147,16 +147,17 @@ const CATEGORY_LABELS: Record<string, string> = {
  * stays the source of truth for the compare call.
  */
 export function fieldsFromContext(context: AnalyzePaymentContext): PaymentField[] {
-  const accounts = (context.existingAccounts ?? [])
-    .map((token) => ACCOUNT_NAMES[token] ?? token)
-    .filter(Boolean);
-  const banks = accounts.filter(
-    (name, index) =>
-      !ROUTE_TOKENS.has(context.existingAccounts[index]) && accounts.indexOf(name) === index,
-  );
-  const routes = context.existingAccounts
-    .filter((token) => ROUTE_TOKENS.has(token))
-    .map((token) => ACCOUNT_NAMES[token] ?? token);
+  const tokens = context.existingAccounts ?? [];
+  const banks = [
+    ...new Set(
+      tokens.filter((token) => !ROUTE_TOKENS.has(token)).map((token) => ACCOUNT_NAMES[token] ?? token),
+    ),
+  ];
+  const routes = [
+    ...new Set(
+      tokens.filter((token) => ROUTE_TOKENS.has(token)).map((token) => ACCOUNT_NAMES[token] ?? token),
+    ),
+  ];
 
   const keepFx =
     context.fxRetentionPreference === "required"
