@@ -20,7 +20,10 @@ const initialValue: PaymentContextValue = {
   urgency: "today",
 };
 
-const PaymentContext = createContext<PaymentContextStore | undefined>(undefined);
+const PaymentContext = createContext<PaymentContextStore>({
+  ...initialValue,
+  setDraft: () => {},
+});
 
 export function PaymentContextProvider({ children }: { children: ReactNode }) {
   const [draft, setDraft] = useState<PaymentContextValue>(initialValue);
@@ -29,9 +32,7 @@ export function PaymentContextProvider({ children }: { children: ReactNode }) {
 }
 
 export function usePaymentContext() {
-  const value = useContext(PaymentContext);
-  if (!value) throw new Error("usePaymentContext must be used inside PaymentContextProvider");
-  return value;
+  return useContext(PaymentContext);
 }
 
 export function getPaymentValue(fields: PaymentField[], label: string, fallback: string) {
