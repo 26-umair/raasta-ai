@@ -16,7 +16,7 @@ export function AskRaastaPage() {
   const [prompt, setPrompt] = useState(goldenPrompt);
   const [stage, setStage] = useState<Stage>("prompt");
   const [urgency, setUrgency] = useState<"today" | "flexible">("today");
-  const [fields, setFields] = useState(() => contextFields.map(([label, value]) => ({ label, value })));
+  const [fields, setFields] = useState<Array<{ label: string; value: string }>>(() => contextFields.map(([label, value]) => ({ label, value })));
   const finish = useCallback(() => navigate({ to: "/recommendation", search: { flexible: urgency === "flexible" ? "yes" : undefined } }), [navigate, urgency]);
   if (stage === "loading") return <div className="page-shell centered-state"><LoadingSequence steps={analysisSteps} onComplete={finish} /></div>;
   return <div className="page-shell ask-page"><header className="ask-heading"><p className="eyebrow"><Wand2 /> AI Payment Advisor for Pakistan</p><h1>How should you receive this payment in Pakistan?</h1><p>Tell Raasta about your client, payment and priorities. We'll compare the routes that actually fit your situation.</p></header>

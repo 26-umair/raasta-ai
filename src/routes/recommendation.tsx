@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { RecommendationPage } from "@/components/raasta/recommendation-page";
 
 export const Route = createFileRoute("/recommendation")({
-  validateSearch: (search: Record<string, unknown>) => ({ flexible: search.flexible === "yes" ? "yes" : undefined }),
+  validateSearch: (search: Record<string, unknown>) => ({ flexible: search["flexible"] === "yes" ? "yes" : undefined }),
   head: () => ({ meta: [
     { title: "Payment Recommendation — Raasta AI" },
     { name: "description", content: "Review the best current and long-term payment routes for a Pakistan-based freelancer." },

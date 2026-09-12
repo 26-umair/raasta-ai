@@ -13,7 +13,7 @@ const statusConfig = {
   likely: { label: "Likely", Icon: Info, className: "status-estimated" },
 };
 
-export function StatusBadge({ type, label, help }: { type: StatusType; label?: string; help?: string }) {
+export function StatusBadge({ type, label, help }: { type: StatusType; label?: string | undefined; help?: string | undefined }) {
   const item = statusConfig[type];
   const badge = <span className={cn("status-badge", item.className)}><item.Icon />{label ?? item.label}</span>;
   if (!help) return badge;
