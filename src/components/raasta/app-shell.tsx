@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import { StatusBadge } from "./shared";
+import { PaymentContextProvider } from "./payment-context";
 
 const nav = [
   { to: "/" as const, label: "Ask Raasta", Icon: MessageSquareText },
@@ -33,5 +34,5 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener("raasta:open-sources", openSources);
   }, []);
   const navigation = <><Brand /><nav aria-label="Primary navigation" className="side-nav">{nav.map(({ to, label, Icon }) => <Link key={to} to={to} onClick={() => setMenuOpen(false)} className={cn("side-link", path === to && "active")}><Icon />{label}</Link>)}<button className="side-link" type="button" onClick={() => { setSourcesOpen(true); setMenuOpen(false); }}><BookOpen />Sources</button></nav><button className="verified-box" type="button" onClick={() => setSourcesOpen(true)}><span><ShieldCheck />Rules verified</span><strong>12 Sep 2026</strong><small>SBP · FBR · PSEB</small></button></>;
-  return <div className="app-shell"><aside className="desktop-sidebar">{navigation}</aside><header className="mobile-header"><Brand /><Button variant="ghost" size="icon" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><Menu /></Button></header><main className="app-main">{children}</main><Sheet open={menuOpen} onOpenChange={setMenuOpen}><SheetContent side="left" className="mobile-nav-sheet">{navigation}</SheetContent></Sheet><Sheet open={sourcesOpen} onOpenChange={setSourcesOpen}><SheetContent className="evidence-drawer"><SheetHeader><SheetTitle>Rule Evidence</SheetTitle><SheetDescription>What currently supports Raasta's Pakistan-specific context.</SheetDescription></SheetHeader><SourceEvidence onClose={() => setSourcesOpen(false)} /></SheetContent></Sheet></div>;
+  return <PaymentContextProvider><div className="app-shell"><aside className="desktop-sidebar">{navigation}</aside><header className="mobile-header"><Brand /><Button variant="ghost" size="icon" onClick={() => setMenuOpen(true)} aria-label="Open navigation"><Menu /></Button></header><main className="app-main">{children}</main><Sheet open={menuOpen} onOpenChange={setMenuOpen}><SheetContent side="left" className="mobile-nav-sheet">{navigation}</SheetContent></Sheet><Sheet open={sourcesOpen} onOpenChange={setSourcesOpen}><SheetContent className="evidence-drawer"><SheetHeader><SheetTitle>Rule Evidence</SheetTitle><SheetDescription>What currently supports Raasta's Pakistan-specific context.</SheetDescription></SheetHeader><SourceEvidence onClose={() => setSourcesOpen(false)} /></SheetContent></Sheet></div></PaymentContextProvider>;
 }
