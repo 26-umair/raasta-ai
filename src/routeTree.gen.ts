@@ -10,33 +10,53 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PrcCheckRouteImport } from './routes/prc-check'
+import { Route as RecommendationRouteImport } from './routes/recommendation'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrcCheckRoute = PrcCheckRouteImport.update({
+  id: '/prc-check',
+  path: '/prc-check',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecommendationRoute = RecommendationRouteImport.update({
+  id: '/recommendation',
+  path: '/recommendation',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/prc-check': typeof PrcCheckRoute
+  '/recommendation': typeof RecommendationRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/prc-check': typeof PrcCheckRoute
+  '/recommendation': typeof RecommendationRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/prc-check': typeof PrcCheckRoute
+  '/recommendation': typeof RecommendationRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/prc-check' | '/recommendation'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/prc-check' | '/recommendation'
+  id: '__root__' | '/' | '/prc-check' | '/recommendation'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PrcCheckRoute: typeof PrcCheckRoute
+  RecommendationRoute: typeof RecommendationRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +68,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/prc-check': {
+      id: '/prc-check'
+      path: '/prc-check'
+      fullPath: '/prc-check'
+      preLoaderRoute: typeof PrcCheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recommendation': {
+      id: '/recommendation'
+      path: '/recommendation'
+      fullPath: '/recommendation'
+      preLoaderRoute: typeof RecommendationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PrcCheckRoute: PrcCheckRoute,
+  RecommendationRoute: RecommendationRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
