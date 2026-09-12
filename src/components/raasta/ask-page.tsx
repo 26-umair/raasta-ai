@@ -1,10 +1,11 @@
 import { useCallback, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Check, Edit3, HelpCircle, Wand2 } from "lucide-react";
+import { ArrowRight, Check, Edit3, HelpCircle, ShieldCheck, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
+import type { AnalyzePaymentResult } from "@/integrations/external-supabase/analyze-payment";
 import {
   analysisSteps,
   exampleScenarios,
@@ -12,10 +13,11 @@ import {
   mockScenarios,
   type MockScenarioKey,
 } from "./data";
+import { buildAnalysisContext } from "./map-context";
 import { usePaymentContext } from "./payment-context";
 import { LoadingSequence } from "./shared";
 
-type Stage = "prompt" | "context" | "loading";
+type Stage = "prompt" | "context" | "loading" | "clarify";
 
 export function AskRaastaPage() {
   const navigate = useNavigate();
@@ -25,24 +27,98 @@ export function AskRaastaPage() {
   const [urgency, setUrgency] = useState<"today" | "flexible">(payment.urgency);
   const [scenario, setScenario] = useState<MockScenarioKey>(payment.scenario);
   const [fields, setFields] = useState(payment.fields);
-  const finish = useCallback(() => {
+  const [clarification, setClarification] = useState<AnalyzePaymentResult["clarification"]>();
+  const [issues, setIssues] = useState<AnalyzePaymentResult["validation"]["issues"]>([]);
+
+  const goToResult = useCallback(() => {
+    navigate({ to: "/recommendation", search: { flexible: undefined } });
+  }, [navigate]);
+
+  const handleResult = useCallback(
+    (result: AnalyzePaymentResult | undefined) => {
+      if (!result) {
+        setStage("context");
+        return;
+      }
+      if (!result.validation.valid) {
+        setIssues(result.validation.issues);
+        setStage("context");
+        return;
+      }
+      setIssues([]);
+      if (result.clarification.needed) {
+        setClarification(result.clarification);
+        setStage("clarify");
+        return;
+      }
+      goToResult();
+    },
+    [goToResult],
+  );
+
+  const startAnalysis = useCallback(async () => {
     payment.setDraft({ prompt, fields, scenario, urgency });
-    navigate({
-      to: "/recommendation",
-      search: { flexible: urgency === "flexible" ? "yes" : undefined },
-    });
-  }, [fields, navigate, payment, prompt, scenario, urgency]);
+    const context = {
+      ...buildAnalysisContext(fields, prompt),
+      urgency: (urgency === "today" ? "today" : "not_urgent") as "today" | "not_urgent",
+    };
+    setStage("loading");
+    handleResult(await payment.runAnalysis(context));
+  }, [fields, handleResult, payment, prompt, scenario, urgency]);
+
+  const answerClarification = useCallback(
+    async (patch: Record<string, unknown>) => {
+      setStage("loading");
+      handleResult(await payment.patchAnalysis(patch));
+    },
+    [handleResult, payment],
+  );
+
   const selectScenario = (key: MockScenarioKey) => {
     setScenario(key);
     setPrompt(mockScenarios[key].prompt);
     setFields(fieldsForScenario(key));
   };
+
   if (stage === "loading")
     return (
       <div className="page-shell centered-state">
-        <LoadingSequence steps={analysisSteps} onComplete={finish} />
+        <LoadingSequence steps={analysisSteps} onComplete={() => {}} />
       </div>
     );
+
+  if (stage === "clarify" && clarification)
+    return (
+      <div className="page-shell ask-page">
+        <section className="context-panel">
+          <div className="clarification-card">
+            <div className="question-icon">
+              <HelpCircle />
+            </div>
+            <div>
+              <p className="eyebrow">One thing could materially change my recommendation</p>
+              <h3>{clarification.question}</h3>
+              {clarification.reason && <p className="helper-text">{clarification.reason}</p>}
+              <div className="choice-row">
+                {clarification.answerOptions.map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() => void answerClarification(option.patch)}
+                  >
+                    <Check /> {option.label}
+                  </button>
+                ))}
+              </div>
+              <Button variant="ghost" onClick={() => setStage("context")}>
+                <Edit3 /> Edit details
+              </Button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+
   return (
     <div className="page-shell ask-page">
       <header className="ask-heading">
@@ -69,7 +145,7 @@ export function AskRaastaPage() {
             />
             <div className="prompt-footer">
               <span>
-                <ShieldCheckIcon /> Uses mock rules for this prototype
+                <ShieldCheck className="mini-shield" /> Compared by Raasta's Pakistan route engine
               </span>
               <Button size="lg" onClick={() => setStage("context")} disabled={!prompt.trim()}>
                 Find My Best Route <ArrowRight />
@@ -137,46 +213,45 @@ export function AskRaastaPage() {
               </Popover>
             ))}
           </div>
-          <div className="clarification-card">
-            <div className="question-icon">
-              <HelpCircle />
+          {payment.analysis.error && (
+            <div className="analysis-error" role="status">
+              <p>{payment.analysis.error}</p>
+              <Button onClick={() => void startAnalysis()}>Retry</Button>
             </div>
-            <div>
-              <p className="eyebrow">One thing could materially change my recommendation</p>
-              <h3>
-                Do you need to receive this payment today, or can you wait to set up the optimal
-                route?
-              </h3>
-              <div className="choice-row">
-                <button
-                  type="button"
-                  className={urgency === "today" ? "selected" : ""}
-                  onClick={() => setUrgency("today")}
-                >
-                  <Check /> I need it today
-                </button>
-                <button
-                  type="button"
-                  className={urgency === "flexible" ? "selected" : ""}
-                  onClick={() => setUrgency("flexible")}
-                >
-                  <Check /> I can wait / optimize first
-                </button>
-              </div>
-              <Button size="lg" onClick={() => setStage("loading")}>
-                Compare My Routes <ArrowRight />
-              </Button>
+          )}
+          {issues.length > 0 && (
+            <div className="analysis-error" role="status">
+              <p>Raasta needs a little more before it can compare routes:</p>
+              <ul className="bank-question-list">
+                {issues.map((issue) => (
+                  <li key={`${issue.field}-${issue.message}`}>{issue.message}</li>
+                ))}
+              </ul>
             </div>
+          )}
+          <div className="context-actions">
+            <div className="choice-row">
+              <button
+                type="button"
+                className={urgency === "today" ? "selected" : ""}
+                onClick={() => setUrgency("today")}
+              >
+                <Check /> This payment is due today
+              </button>
+              <button
+                type="button"
+                className={urgency === "flexible" ? "selected" : ""}
+                onClick={() => setUrgency("flexible")}
+              >
+                <Check /> Timing is flexible
+              </button>
+            </div>
+            <Button size="lg" onClick={() => void startAnalysis()}>
+              Compare My Routes <ArrowRight />
+            </Button>
           </div>
         </section>
       )}
     </div>
-  );
-}
-function ShieldCheckIcon() {
-  return (
-    <span className="mini-shield" aria-hidden="true">
-      ✓
-    </span>
   );
 }
