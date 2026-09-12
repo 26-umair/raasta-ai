@@ -129,7 +129,7 @@ export function buildAnalysisContext(
   if (fxRetentionPreference !== "no_preference") priorities.push("keep_foreign_currency");
   priorities.push("balanced");
 
-  const rails = clientRails(prompt, `${source} ${existingRoute}`);
+  const rails = clientRails(prompt, source);
   const accounts = [...new Set([...accountsFrom(bank), ...accountsFrom(existingRoute)])];
 
   const context: AnalyzePaymentContext = {
