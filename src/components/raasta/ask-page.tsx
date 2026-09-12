@@ -199,11 +199,21 @@ export function AskRaastaPage() {
               <span>
                 <ShieldCheck className="mini-shield" /> Compared by Raasta's Pakistan route engine
               </span>
-              <Button size="lg" onClick={() => setStage("context")} disabled={!prompt.trim()}>
+              <Button
+                size="lg"
+                onClick={() => void startExtraction()}
+                disabled={!prompt.trim()}
+              >
                 Find My Best Route <ArrowRight />
               </Button>
             </div>
           </div>
+          {extractionError && (
+            <div className="analysis-error" role="status">
+              <p>{extractionError}</p>
+              <Button onClick={() => void startExtraction()}>Retry</Button>
+            </div>
+          )}
           <div className="example-row" aria-label="Example prompts">
             {exampleScenarios.map((example) => (
               <button type="button" key={example.key} onClick={() => selectScenario(example.key)}>
