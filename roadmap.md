@@ -1,6 +1,6 @@
 # Roadmap
-- [ ] Build shared Raasta shell and design system
-- [ ] Build Ask Raasta interaction flow
-- [ ] Build recommendation screen and interactions
-- [ ] Build PRC upload and mock analysis states
-- [ ] Verify desktop/mobile flows and build health
+- [x] Build shared Raasta shell and design system
+- [x] Build Ask Raasta interaction flow
+- [x] Build recommendation screen and interactions
+- [x] Build PRC upload and mock analysis states
+- [x] Verify desktop/mobile flows and build health
