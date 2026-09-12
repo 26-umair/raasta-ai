@@ -38,6 +38,8 @@ type PaymentContextStore = PaymentContextValue & {
     patch: Partial<AnalyzePaymentContext>,
   ) => Promise<AnalyzePaymentResult | undefined>;
   resetAnalysis: () => void;
+  /** Stores the backend's normalizedContext as the source of truth for compare. */
+  storeExtraction: (context: AnalyzePaymentContext) => void;
 };
 
 const initialValue: PaymentContextValue = {
@@ -54,6 +56,7 @@ const PaymentContext = createContext<PaymentContextStore>({
   runAnalysis: async () => undefined,
   patchAnalysis: async () => undefined,
   resetAnalysis: () => {},
+  storeExtraction: () => {},
 });
 
 export function PaymentContextProvider({ children }: { children: ReactNode }) {
