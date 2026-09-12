@@ -136,6 +136,60 @@ export const ANALYSIS_AS_OF_DATE = "2026-09-12";
 const GENERIC_FAILURE =
   "Raasta couldn't compare the routes right now. Your details are still here — try again.";
 
+export type ExtractPaymentResponse = {
+  ok: boolean;
+  engineVersion?: string;
+  error?: string;
+  normalizedContext?: AnalyzePaymentContext & Record<string, unknown>;
+  result?: AnalyzePaymentResult;
+};
+
+/**
+ * Natural-language extraction: sends the raw prompt, returns the engine's
+ * `normalizedContext` (source of truth for the compare call) plus the result.
+ * Throws a user-safe Error on any failure — never fabricates context.
+ */
+export async function extractPayment(
+  message: string,
+): Promise<{
+  normalizedContext: AnalyzePaymentContext;
+  result?: AnalyzePaymentResult;
+  engineVersion?: string;
+}> {
+  try {
+    await getExternalSession();
+  } catch {
+    throw new Error(GENERIC_FAILURE);
+  }
+
+  const { data, error } = await externalSupabase.functions.invoke<ExtractPaymentResponse>(
+    "analyze-payment",
+    { body: { type: "analyze_payment", message } },
+  );
+
+  console.log("Extraction prompt", message);
+  console.log("Extraction response", data);
+
+  if (error) {
+    console.error("[analyze-payment] extraction invoke failed", error);
+    throw new Error(GENERIC_FAILURE);
+  }
+  if (!data?.ok || !data.normalizedContext) {
+    console.error("[analyze-payment] extraction returned an error", data?.error);
+    throw new Error(GENERIC_FAILURE);
+  }
+  console.log("Normalized context used for cards", data.normalizedContext);
+
+  const payload: {
+    normalizedContext: AnalyzePaymentContext;
+    result?: AnalyzePaymentResult;
+    engineVersion?: string;
+  } = { normalizedContext: data.normalizedContext };
+  if (data.result) payload.result = data.result;
+  if (data.engineVersion) payload.engineVersion = data.engineVersion;
+  return payload;
+}
+
 /** Calls the deployed engine. Throws a user-safe Error on any failure. */
 export async function analyzePayment(
   context: AnalyzePaymentContext,
