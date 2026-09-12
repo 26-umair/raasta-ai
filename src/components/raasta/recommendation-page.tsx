@@ -87,11 +87,7 @@ export function RecommendationPage({ startsFlexible = false }: { startsFlexible?
   const work = getPaymentValue(payment.fields, "Work", "Freelance work");
   const bank = getPaymentValue(payment.fields, "Current bank", "your bank");
 
-  const applySensitivity = async (next: {
-    wait?: boolean;
-    fx?: boolean;
-    islamic?: boolean;
-  }) => {
+  const applySensitivity = async (next: { wait?: boolean; fx?: boolean; islamic?: boolean }) => {
     const base = baseRequest.current;
     if (!base) return;
     const wait = next.wait ?? waitTwoDays;
@@ -214,7 +210,10 @@ export function RecommendationPage({ startsFlexible = false }: { startsFlexible?
         {bestNow ? (
           <RouteCard route={bestNow} />
         ) : (
-          <NoRouteCard sameDay={sameDayBlocked} onRelax={() => void applySensitivity({ wait: true })} />
+          <NoRouteCard
+            sameDay={sameDayBlocked}
+            onRelax={() => void applySensitivity({ wait: true })}
+          />
         )}
         {bestLongTerm && <LongTermCard route={bestLongTerm} />}
       </div>

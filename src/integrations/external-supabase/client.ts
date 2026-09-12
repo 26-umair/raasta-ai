@@ -1,20 +1,19 @@
 // Client for the user's own external Supabase project (not Lovable Cloud).
 // Reads VITE_PUBLIC_SUPABASE_URL / VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY from .env.local.
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from "@supabase/supabase-js";
 
-const SUPABASE_URL = import.meta.env['VITE_PUBLIC_SUPABASE_URL'] as string | undefined;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env['VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY'] as
-  | string
-  | undefined;
+const SUPABASE_URL = import.meta.env["VITE_PUBLIC_SUPABASE_URL"] as string | undefined;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env["VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY"] as
+  string | undefined;
 
 function isNewSupabaseApiKey(value: string): boolean {
-  return value.startsWith('sb_publishable_') || value.startsWith('sb_secret_');
+  return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
 }
 
 function createSupabaseFetch(supabaseKey: string): typeof fetch {
   return (input, init) => {
     const headers = new Headers(
-      typeof Request !== 'undefined' && input instanceof Request ? input.headers : undefined,
+      typeof Request !== "undefined" && input instanceof Request ? input.headers : undefined,
     );
 
     if (init?.headers) {
@@ -22,11 +21,14 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
     }
 
     // New Supabase API keys are opaque strings, not bearer JWTs.
-    if (isNewSupabaseApiKey(supabaseKey) && headers.get('Authorization') === `Bearer ${supabaseKey}`) {
-      headers.delete('Authorization');
+    if (
+      isNewSupabaseApiKey(supabaseKey) &&
+      headers.get("Authorization") === `Bearer ${supabaseKey}`
+    ) {
+      headers.delete("Authorization");
     }
 
-    headers.set('apikey', supabaseKey);
+    headers.set("apikey", supabaseKey);
     return fetch(input, { ...init, headers });
   };
 }
@@ -34,7 +36,7 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
 function createExternalClient() {
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const message =
-      'Missing external Supabase env var(s): VITE_PUBLIC_SUPABASE_URL / VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY. Add them to .env.local.';
+      "Missing external Supabase env var(s): VITE_PUBLIC_SUPABASE_URL / VITE_PUBLIC_SUPABASE_PUBLISHABLE_KEY. Add them to .env.local.";
     console.error(`[ExternalSupabase] ${message}`);
     throw new Error(message);
   }
