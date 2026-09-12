@@ -8,13 +8,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Compare payment routes for Pakistani freelancers using a clear, context-aware mock advisor.",
+          "Compare payment routes for Pakistani freelancers with Raasta's Pakistan-specific route engine.",
       },
       { property: "og:title", content: "Ask Raasta — Pakistan Payment Route Advisor" },
       {
         property: "og:description",
         content:
-          "Compare payment routes for Pakistani freelancers using a clear, context-aware mock advisor.",
+          "Compare payment routes for Pakistani freelancers with Raasta's Pakistan-specific route engine.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

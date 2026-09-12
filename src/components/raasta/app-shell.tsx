@@ -50,8 +50,8 @@ function SourceEvidence({ onClose }: { onClose?: () => void }) {
       <div className="drawer-intro">
         <ShieldCheck />
         <p>
-          Evidence labels are mock metadata for this frontend prototype. Live links will be added
-          later.
+          These labels summarise the rule areas Raasta's engine uses. Direct source links will be
+          added later.
         </p>
       </div>
       {[
