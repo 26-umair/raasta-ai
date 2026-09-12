@@ -5,15 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import type { AnalyzePaymentResult } from "@/integrations/external-supabase/analyze-payment";
 import {
-  analysisSteps,
-  exampleScenarios,
-  fieldsForScenario,
-  mockScenarios,
-  type MockScenarioKey,
-} from "./data";
-import { buildAnalysisContext } from "./map-context";
+  extractPayment,
+  type AnalyzePaymentResult,
+} from "@/integrations/external-supabase/analyze-payment";
+import { analysisSteps, exampleScenarios, mockScenarios, type MockScenarioKey } from "./data";
+import { buildAnalysisContext, fieldsFromContext } from "./map-context";
 import { usePaymentContext } from "./payment-context";
 import { LoadingSequence } from "./shared";
 
@@ -29,6 +26,7 @@ export function AskRaastaPage() {
   const [fields, setFields] = useState(payment.fields);
   const [clarification, setClarification] = useState<AnalyzePaymentResult["clarification"]>();
   const [issues, setIssues] = useState<AnalyzePaymentResult["validation"]["issues"]>([]);
+  const [extractionError, setExtractionError] = useState<string>();
 
   const goToResult = useCallback(() => {
     navigate({ to: "/recommendation", search: { flexible: undefined } });
