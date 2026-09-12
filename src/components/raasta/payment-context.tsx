@@ -20,7 +20,10 @@ const initialValue: PaymentContextValue = {
   urgency: "today",
 };
 
-const PaymentContext = createContext<PaymentContextStore | undefined>(undefined);
+const PaymentContext = createContext<PaymentContextStore>({
+  ...initialValue,
+  setDraft: () => {},
+});
 
 export function PaymentContextProvider({ children }: { children: ReactNode }) {
   const [draft, setDraft] = useState<PaymentContextValue>(initialValue);
